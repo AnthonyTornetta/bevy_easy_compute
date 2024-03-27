@@ -1,3 +1,9 @@
+# NOTE
+
+This branch is for my own personal usage in [Cosmos](https://github.com/AnthonyTornetta/Cosmos) only. You
+may not find this particularly useful for your own projects. The main branch of this repo is meant for
+general usage.
+
 # Bevy App Compute
 
 ![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
