@@ -39,13 +39,19 @@ impl<W: ComputeWorker> Plugin for AppComputeWorkerPlugin<W> {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let worker = W::build(&mut app.world);
+        // Move this
+        //let worker = W::build(&mut app.world);
 
-        app.insert_resource(worker)
-            .add_systems(Update, AppComputeWorker::<W>::extract_pipelines)
-            .add_systems(
-                PostUpdate,
-                (AppComputeWorker::<W>::unmap_all, AppComputeWorker::<W>::run).chain(),
-            );
+        //app.insert_resource(worker)
+        app.add_systems(
+            Update,
+            AppComputeWorker::<W>::extract_pipelines.run_if(resource_exists::<AppComputeWorker<W>>),
+        )
+        .add_systems(
+            PostUpdate,
+            (AppComputeWorker::<W>::unmap_all, AppComputeWorker::<W>::run)
+                .run_if(resource_exists::<AppComputeWorker<W>>)
+                .chain(),
+        );
     }
 }
