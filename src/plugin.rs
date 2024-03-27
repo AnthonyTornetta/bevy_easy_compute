@@ -39,10 +39,8 @@ impl<W: ComputeWorker> Plugin for AppComputeWorkerPlugin<W> {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        // Move this
-        //let worker = W::build(&mut app.world);
+        // NOTE: It is up to YOU to call W::build(&mut world) somewhere in your code.
 
-        //app.insert_resource(worker)
         app.add_systems(
             Update,
             AppComputeWorker::<W>::extract_pipelines.run_if(resource_exists::<AppComputeWorker<W>>),

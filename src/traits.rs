@@ -8,6 +8,11 @@ use wgpu::PushConstantRange;
 use crate::worker::AppComputeWorker;
 
 /// Trait to declare [`AppComputeWorker<W>`] structs.
+///
+/// # PLEASE NOTE
+/// It is up to you to call the build method in one of your systems.
+///
+/// This is to allow the dynamic loading of compute shaders.
 pub trait ComputeWorker: Sized + Send + Sync + 'static {
     fn build(world: &mut World) -> AppComputeWorker<Self>;
 }
