@@ -1,5 +1,9 @@
 use core::panic;
-use std::{marker::PhantomData, ops::Deref};
+use std::{
+    marker::PhantomData,
+    ops::Deref,
+    time::{Duration, SystemTime},
+};
 
 use bevy::{
     prelude::{Res, ResMut, Resource},
@@ -29,7 +33,7 @@ pub enum RunMode {
 pub enum WorkerState {
     Created,
     Available,
-    Working,
+    Working { start_time: SystemTime },
     FinishedWorking,
 }
 
@@ -69,6 +73,11 @@ pub struct AppComputeWorker<W: ComputeWorker> {
     steps: Vec<Step>,
     command_encoder: Option<CommandEncoder>,
     run_mode: RunMode,
+    submission_queue_processed: bool,
+    /// Maximum duration the compute shader will run asyncronously before being set to synchronous.
+    ///
+    /// 0 seconds means the shader will immediately be polled synchronously. None emeans the shader will only run asynchronously.
+    maximum_async_time: Option<Duration>,
     _phantom: PhantomData<W>,
 }
 
@@ -99,6 +108,8 @@ impl<W: ComputeWorker> From<&AppComputeWorkerBuilder<'_, W>> for AppComputeWorke
             command_encoder,
             run_mode: builder.run_mode,
             _phantom: PhantomData,
+            maximum_async_time: builder.maximum_async_time,
+            submission_queue_processed: false,
         }
     }
 }
@@ -207,15 +218,11 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
         for (_, staging_buffer) in self.staging_buffers.iter_mut() {
             let read_buffer_slice = staging_buffer.buffer.slice(..);
 
-            read_buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-                let err = result.err();
-                if err.is_some() {
-                    let some_err = err.unwrap();
-                    panic!("{}", some_err.to_string());
+            read_buffer_slice.map_async(wgpu::MapMode::Read, |result| {
+                if let Some(err) = result.err() {
+                    panic!("{}", err.to_string());
                 }
             });
-
-            staging_buffer.mapped = true;
         }
         self
     }
@@ -312,19 +319,57 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
     fn submit(&mut self) -> &mut Self {
         let encoder = self.command_encoder.take().unwrap();
         self.render_queue.submit(Some(encoder.finish()));
-        self.state = WorkerState::Working;
+        self.state = WorkerState::Working {
+            start_time: SystemTime::now(),
+        };
         self
     }
 
     #[inline]
-    fn poll(&self) -> bool {
-        match self
-            .render_device
-            .wgpu_device()
-            .poll(wgpu::MaintainBase::Wait)
-        {
-            wgpu::MaintainResult::SubmissionQueueEmpty => true,
-            wgpu::MaintainResult::Ok => false,
+    fn poll(&mut self) -> bool {
+        let WorkerState::Working { start_time } = self.state else {
+            // We will always be in this state at this point
+            panic!("Called AppComputeWorker::poll() without being in the Working state!");
+        };
+
+        let is_async = self
+            .maximum_async_time
+            .map(|x| {
+                SystemTime::now()
+                    .duration_since(start_time)
+                    .unwrap_or_default()
+                    < x
+            })
+            .unwrap_or(true);
+
+        if is_async {
+            match self
+                .render_device
+                .wgpu_device()
+                .poll(wgpu::MaintainBase::Poll)
+            {
+                // The first few times the poll occurs the queue will be empty, because wgpu hasn't started anything yet.
+                // We need to wait until `MaintainResult::Ok`, which means wgpu has started to process our data.
+                // Then, the next time the queue is empty (`MaintainResult::SubmissionQueueEmpty`), wgpu has finished processing the data and we are done.
+                wgpu::MaintainResult::SubmissionQueueEmpty => {
+                    let res = self.submission_queue_processed;
+                    self.submission_queue_processed = false;
+                    res
+                }
+                wgpu::MaintainResult::Ok => {
+                    self.submission_queue_processed = true;
+                    false
+                }
+            }
+        } else {
+            match self
+                .render_device
+                .wgpu_device()
+                .poll(wgpu::MaintainBase::Wait)
+            {
+                wgpu::MaintainResult::SubmissionQueueEmpty => true,
+                wgpu::MaintainResult::Ok => false,
+            }
         }
     }
 
@@ -345,7 +390,8 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
 
     #[inline]
     fn ready_to_execute(&self) -> bool {
-        (self.state != WorkerState::Working) && (self.run_mode != RunMode::OneShot(false))
+        (!matches!(self.state, WorkerState::Working { start_time: _ }))
+            && (self.run_mode != RunMode::OneShot(false))
     }
 
     pub(crate) fn run(mut worker: ResMut<Self>) {
@@ -375,6 +421,11 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
         }
 
         if worker.run_mode != RunMode::OneShot(false) && worker.poll() {
+            for (_, staging_buffer) in worker.staging_buffers.iter_mut() {
+                // By this the staging buffers would've been mapped.
+                staging_buffer.mapped = true;
+            }
+
             worker.state = WorkerState::FinishedWorking;
             worker.command_encoder = Some(
                 worker
