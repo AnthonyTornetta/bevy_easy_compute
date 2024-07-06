@@ -14,7 +14,7 @@ impl Plugin for AppComputePlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let render_device = app.world.resource::<RenderDevice>().clone();
+        let render_device = app.world().resource::<RenderDevice>().clone();
 
         app.insert_resource(AppPipelineCache::new(render_device))
             .add_systems(PreUpdate, extract_shaders)
