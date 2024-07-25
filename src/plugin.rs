@@ -73,6 +73,7 @@ impl<W: ComputeWorker> Plugin for AppComputeWorkerPlugin<W> {
         .add_systems(
             PostUpdate,
             (AppComputeWorker::<W>::unmap_all, AppComputeWorker::<W>::run)
+                .run_if(resource_exists::<AppComputeWorker<W>>)
                 .in_set(BevyEasyComputePostUpdateSet::ExecuteCompute)
                 .chain(),
         );
