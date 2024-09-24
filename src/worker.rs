@@ -69,7 +69,7 @@ pub struct AppComputeWorker<W: ComputeWorker> {
     render_queue: RenderQueue,
     cached_pipeline_ids: HashMap<String, CachedAppComputePipelineId>,
     pipelines: HashMap<String, Option<ComputePipeline>>,
-    buffers: HashMap<String, Buffer>,
+    pub buffers: HashMap<String, Buffer>,
     staging_buffers: HashMap<String, StagingBuffer>,
     steps: Vec<Step>,
     command_encoder: Option<CommandEncoder>,
