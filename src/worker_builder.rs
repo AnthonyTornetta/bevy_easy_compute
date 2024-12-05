@@ -1,20 +1,25 @@
 use std::{borrow::Cow, marker::PhantomData, time::Duration};
 
 use bevy::{
-    prelude::{AssetServer, World},
+    asset::{Assets, Handle},
+    core::Name,
+    log::info,
+    prelude::{AssetServer, Trigger, World},
     render::{
+        gpu_readback::{Readback, ReadbackComplete},
         render_resource::{
             encase::{private::WriteInto, StorageBuffer, UniformBuffer},
-            Buffer, ComputePipelineDescriptor, ShaderRef, ShaderType,
+            Buffer, CachedComputePipelineId, ComputePipelineDescriptor, PipelineCache, ShaderRef,
+            ShaderType,
         },
         renderer::RenderDevice,
+        storage::ShaderStorageBuffer,
     },
     utils::HashMap,
 };
 use wgpu::{util::BufferInitDescriptor, BufferDescriptor, BufferUsages};
 
 use crate::{
-    pipeline_cache::{AppPipelineCache, CachedAppComputePipelineId},
     traits::{ComputeShader, ComputeWorker},
     worker::{AppComputeWorker, ComputePass, RunMode, StagingBuffer, Step},
 };
@@ -23,8 +28,8 @@ use crate::{
 /// from your structs implementing [`ComputeWorker`]
 pub struct AppComputeWorkerBuilder<'a, W: ComputeWorker> {
     pub(crate) world: &'a mut World,
-    pub(crate) cached_pipeline_ids: HashMap<String, CachedAppComputePipelineId>,
-    pub(crate) buffers: HashMap<String, Buffer>,
+    pub(crate) cached_pipeline_ids: HashMap<String, CachedComputePipelineId>,
+    pub(crate) buffers: HashMap<String, Handle<ShaderStorageBuffer>>,
     pub(crate) staging_buffers: HashMap<String, StagingBuffer>,
     pub(crate) steps: Vec<Step>,
     pub(crate) run_mode: RunMode,
@@ -59,24 +64,45 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
     /// Add a new uniform buffer to the worker, and fill it with `uniform`.
     pub fn add_uniform<T: ShaderType + WriteInto>(&mut self, name: &str, uniform: &T) -> &mut Self {
         T::assert_uniform_compat();
-        let mut buffer = UniformBuffer::new(Vec::new());
-        buffer.write::<T>(uniform).unwrap();
 
-        let render_device = self.world.resource::<RenderDevice>();
-
+        // mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+        let mut buffer = ShaderStorageBuffer::from(uniform);
         let mut usage = BufferUsages::COPY_DST | BufferUsages::UNIFORM;
         if let Some(extra_usages) = self.extra_buffer_usages {
             usage |= extra_usages;
         }
 
-        self.buffers.insert(
-            name.to_owned(),
-            render_device.create_buffer_with_data(&BufferInitDescriptor {
-                label: Some(name),
-                contents: buffer.as_ref(),
-                usage,
-            }),
-        );
+        buffer.buffer_description.usage |= BufferUsages::COPY_SRC;
+
+        let mut buffers = self.world.resource_mut::<Assets<ShaderStorageBuffer>>();
+        let buffer_id = buffers.add(buffer);
+
+        // Spawn the readback components. For each frame, the data will be read back from the GPU
+        // asynchronously and trigger the `ReadbackComplete` event on this entity. Despawn the entity
+        // to stop reading back the data.
+        self.world
+            .spawn((
+                Name::new(format!("Readback for GPU buffer {name}")),
+                Readback::buffer(buffer_id.clone()),
+            ))
+            .observe(|trigger: Trigger<ReadbackComplete>| {
+                // This matches the type which was used to create the `ShaderStorageBuffer` above,
+                // and is a convenient way to interpret the data.
+                let data: Vec<u32> = trigger.event().to_shader_type();
+                info!("Buffer {:?}", data);
+            });
+
+        self.buffers.insert(name.to_owned(), buffer_id);
+        // let render_device = self.world.resource::<RenderDevice>();
+        //
+        // self.buffers.insert(
+        //     name.to_owned(),
+        //     render_device.create_buffer_with_data(&BufferInitDescriptor {
+        //         label: Some(name),
+        //         contents: buffer.as_ref(),
+        //         usage,
+        //     }),
+        // );
         self
     }
 
@@ -91,6 +117,18 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
         if let Some(extra_usages) = self.extra_buffer_usages {
             usage |= extra_usages;
         }
+
+        // mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+        let mut buffer = ShaderStorageBuffer::from(uniform);
+        let mut usage = BufferUsages::COPY_DST | BufferUsages::UNIFORM;
+        if let Some(extra_usages) = self.extra_buffer_usages {
+            usage |= extra_usages;
+        }
+
+        buffer.buffer_description.usage |= BufferUsages::COPY_SRC;
+
+        let mut buffers = self.world.resource_mut::<Assets<ShaderStorageBuffer>>();
+        let buffer_id = buffers.add(buffer);
 
         self.buffers.insert(
             name.to_owned(),
@@ -249,7 +287,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
     /// They will run sequentially in the order you insert them.
     pub fn add_pass<S: ComputeShader>(&mut self, workgroups: [u32; 3], vars: &[&str]) -> &mut Self {
         if !self.cached_pipeline_ids.contains_key(S::type_path()) {
-            let pipeline_cache = self.world.resource::<AppPipelineCache>();
+            let pipeline_cache = self.world.resource::<PipelineCache>();
 
             let asset_server = self.world.resource::<AssetServer>();
             let shader = match S::shader() {
@@ -259,14 +297,17 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
             }
             .unwrap();
 
-            let cached_id = pipeline_cache.queue_app_compute_pipeline(ComputePipelineDescriptor {
+            let descriptor = ComputePipelineDescriptor {
                 label: None,
                 layout: S::layouts().to_vec(),
                 push_constant_ranges: S::push_constant_ranges().to_vec(),
                 shader_defs: S::shader_defs().to_vec(),
                 entry_point: Cow::Borrowed(S::entry_point()),
                 shader,
-            });
+                zero_initialize_workgroup_memory: false,
+            };
+
+            let cached_id = pipeline_cache.queue_compute_pipeline(descriptor);
 
             self.cached_pipeline_ids
                 .insert(S::type_path().to_string(), cached_id);

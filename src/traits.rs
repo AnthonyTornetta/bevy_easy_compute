@@ -5,11 +5,11 @@ use bevy::{
 };
 use wgpu::PushConstantRange;
 
-use crate::worker::AppComputeWorker;
+use crate::worker::{AppComputeWorker, WorkerBuffers};
 
 /// Trait to declare [`AppComputeWorker<W>`] structs.
 pub trait ComputeWorker: Sized + Send + Sync + 'static {
-    fn build(world: &mut World) -> AppComputeWorker<Self>;
+    fn build(world: &mut World) -> (AppComputeWorker<Self>, WorkerBuffers<Self>);
 }
 
 /// Trait to declare your shaders.

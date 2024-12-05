@@ -30,13 +30,12 @@ impl ComputeWorker for SimpleComputeWorker {
 fn main() {
     App::new()
         .add_plugins(
-            DefaultPlugins
-                // Do not create a window on startup.
-                .set(WindowPlugin {
-                    primary_window: None,
-                    exit_condition: bevy::window::ExitCondition::DontExit,
-                    close_when_requested: false,
-                }),
+            DefaultPlugins, // // Do not create a window on startup.
+                            // .set(WindowPlugin {
+                            //     primary_window: None,
+                            //     exit_condition: bevy::window::ExitCondition::DontExit,
+                            //     close_when_requested: false,
+                            // }),
         )
         .add_plugins(AppComputePlugin)
         .add_plugins(AppComputeWorkerPlugin::<SimpleComputeWorker>::default())

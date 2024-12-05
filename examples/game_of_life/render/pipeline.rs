@@ -3,12 +3,9 @@
 use bevy::{
     asset::DirectAssetAccessExt,
     prelude::{FromWorld, Resource, World},
-    render::{
-        render_resource::{
-            CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, MultisampleState,
-            PipelineCache, PrimitiveState, TextureFormat, VertexState,
-        },
-        texture::BevyDefault,
+    render::render_resource::{
+        CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState, MultisampleState,
+        PipelineCache, PrimitiveState, TextureFormat, VertexState,
     },
 };
 
@@ -30,6 +27,7 @@ impl FromWorld for DrawParticlePipeline {
         let pipeline = pipeline_cache.queue_render_pipeline(
             bevy::render::render_resource::RenderPipelineDescriptor {
                 label: None,
+                zero_initialize_workgroup_memory: false,
                 layout: [bindings.bind_group_layout.clone()].to_vec(),
                 push_constant_ranges: Vec::new(),
                 vertex: VertexState {

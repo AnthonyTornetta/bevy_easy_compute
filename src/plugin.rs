@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
 
-use bevy::{prelude::*, render::renderer::RenderDevice};
+use bevy::{
+    prelude::*,
+    render::extract_resource::ExtractResourcePlugin,
+    // render::{render_resource::PipelineCache, renderer::RenderDevice},
+};
 
 use crate::{
-    extract_shaders, pipeline_cache::AppPipelineCache, process_pipeline_queue_system,
-    traits::ComputeWorker, worker::AppComputeWorker,
+    traits::ComputeWorker,
+    worker::{AppComputeWorker, WorkerBuffers},
 };
 
 /// The main plugin. Always include it if you want to use `bevy_easy_compute`
@@ -14,17 +18,17 @@ impl Plugin for AppComputePlugin {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let render_device = app.world().resource::<RenderDevice>().clone();
+        // let render_device = app.world().resource::<RenderDevice>().clone();
 
         app.configure_sets(Update, BevyEasyComputeSet::ExtractPipelines)
             .configure_sets(PostUpdate, BevyEasyComputePostUpdateSet::ExecuteCompute);
 
-        app.insert_resource(AppPipelineCache::new(render_device))
-            .add_systems(PreUpdate, extract_shaders)
-            .add_systems(
-                Update,
-                process_pipeline_queue_system.in_set(BevyEasyComputeSet::ExtractPipelines),
-            );
+        // app //.insert_resource(PipelineCache::new(render_device))
+        // .add_systems(PreUpdate, extract_shaders)
+        // .add_systems(
+        //     Update,
+        //     process_pipeline_queue_system.in_set(BevyEasyComputeSet::ExtractPipelines),
+        // );
     }
 }
 
@@ -61,14 +65,15 @@ impl<W: ComputeWorker> Plugin for AppComputeWorkerPlugin<W> {
     fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
-        let worker = W::build(app.world_mut());
+        let (worker, worker_buffers) = W::build(app.world_mut());
 
-        app.insert_resource(worker)
+        app.insert_resource(worker_buffers)
+            .insert_resource(worker)
+            .add_plugins(ExtractResourcePlugin::<WorkerBuffers<W>>::default())
             .add_systems(
-                Update,
+                Update, // ExtractSchedule? https://github.com/bevyengine/bevy/blob/main/crates/bevy_render/src/lib.rs#L469
                 AppComputeWorker::<W>::extract_pipelines
-                    .in_set(BevyEasyComputeSet::ExtractPipelines)
-                    .after(process_pipeline_queue_system),
+                    .in_set(BevyEasyComputeSet::ExtractPipelines), // .after(process_pipeline_queue_system),
             )
             .add_systems(
                 PostUpdate,
