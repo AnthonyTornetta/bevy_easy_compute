@@ -1,3 +1,8 @@
+# DEPRECATED
+
+This project has been merged back into [https://github.com/Kjolnyr/bevy_app_compute](https://github.com/Kjolnyr/bevy_app_compute). Please use
+that crate for bevy versions > 0.15.
+
 # Bevy Easy Compute
 
 ![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)
