@@ -3,8 +3,8 @@ use bevy::{
     render::{
         extract_resource::ExtractResource,
         render_resource::{
-            binding_types::{storage_buffer, uniform_buffer},
             BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, ShaderStages,
+            binding_types::{storage_buffer, uniform_buffer},
         },
         renderer::RenderDevice,
     },
@@ -12,7 +12,7 @@ use bevy::{
 use bevy_app_compute::prelude::*;
 
 use crate::worker::{
-    GameOfLifeWorker, Settings, CELLS_IN_BUFFER, CELLS_OUT_BUFFER, SETTINGS_BUFFER,
+    CELLS_IN_BUFFER, CELLS_OUT_BUFFER, GameOfLifeWorker, SETTINGS_BUFFER, Settings,
 };
 
 /// The bind group layout for the minimal data needed to render particle

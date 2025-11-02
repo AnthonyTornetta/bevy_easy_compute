@@ -56,8 +56,7 @@ impl render_graph::ViewNode for DrawParticleNode {
             pipeline_cache.get_render_pipeline_state(pipeline.pipeline)
         {
             #[allow(clippy::unreachable)]
-            let Pipeline::RenderPipeline(pipeline_ready) = pipeline_cached
-            else {
+            let Pipeline::RenderPipeline(pipeline_ready) = pipeline_cached else {
                 unreachable!("Cached pipeline isn't ready");
             };
 
