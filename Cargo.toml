@@ -40,14 +40,11 @@ thiserror = { version = "2", default-features = false }
 tracing = { version = "0.1", default-features = false, features = ["std"] } 
 
 [dependencies.bevy]
-version = "0.17.0"
+version = "0.17.3"
 default-features = false
 # See https://github.com/bevyengine/bevy/blob/main/docs/cargo_features.md
 features = [
-  "bevy_core_pipeline",
-
-  # TODO: is this inherited by downstream users? If so, then we probably don't need it
-  "multi_threaded",
+  "bevy_render",
 ]
 
 [dev-dependencies]
