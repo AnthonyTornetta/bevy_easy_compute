@@ -10,7 +10,7 @@ use bevy::{
         renderer::RenderDevice,
     },
 };
-use bevy_app_compute::prelude::*;
+use bevy_app_compute::{pipeline_cache::BevyAppComputePipelineCache, prelude::*};
 
 use crate::worker::{
     CELLS_IN_BUFFER, CELLS_OUT_BUFFER, GameOfLifeWorker, SETTINGS_BUFFER, Settings,
@@ -55,7 +55,7 @@ pub fn get_buffers_for_renderer(world: &mut World) {
     let render_device = world.resource::<RenderDevice>();
     let bind_group_layout = world.resource::<ParticleBindGroupLayout>();
     let compute_worker = world.resource::<AppComputeWorker<GameOfLifeWorker>>();
-    let pipeline_cache = world.resource::<PipelineCache>();
+    let pipeline_cache = world.resource::<BevyAppComputePipelineCache>();
 
     let bind_group = render_device.create_bind_group(
         None,

@@ -1,10 +1,13 @@
-use bevy::asset::{AssetEvent, AssetId, Assets, Handle};
-use bevy::ecs::message::MessageReader;
+//! A clone of https://github.com/bevyengine/bevy/blob/5f8270f2e049f90139a503d1e930070d926f9427/crates/bevy_render/src/render_resource/pipeline_cache.rs
+//!
+//! We need this because bevy doesn't expose `set_shader` and `remove_shader`
+
+use bevy::asset::{AssetId, Handle};
 use bevy::ecs::resource::Resource;
-use bevy::ecs::system::{Res, ResMut};
+use bevy::ecs::system::ResMut;
 use bevy::platform::collections::{HashMap, HashSet};
+use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderAdapter, RenderDevice, WgpuWrapper};
-use bevy::render::{Extract, render_resource::*};
 use bevy::shader::{
     CachedPipelineId, PipelineCacheError, Shader, ShaderCache, ShaderCacheSource, ShaderDefVal,
     ValidateShader,
@@ -37,11 +40,11 @@ pub enum Pipeline {
 
 /// Index of a cached render pipeline in a [`PipelineCache`].
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
-pub struct CachedRenderPipelineId(CachedPipelineId);
+pub struct AppCachedRenderPipelineId(CachedPipelineId);
 
-impl CachedRenderPipelineId {
+impl AppCachedRenderPipelineId {
     /// An invalid cached render pipeline index, often used to initialize a variable.
-    pub const INVALID: Self = CachedRenderPipelineId(usize::MAX);
+    pub const INVALID: Self = AppCachedRenderPipelineId(usize::MAX);
 
     #[inline]
     pub fn id(&self) -> usize {
@@ -63,7 +66,7 @@ impl AppCachedComputePipelineId {
     }
 }
 
-pub struct CachedPipeline {
+pub struct AppCachedPipeline {
     pub descriptor: PipelineDescriptor,
     pub state: CachedPipelineState,
 }
@@ -163,7 +166,6 @@ fn load_module(
             unimplemented!("Enable feature \"shader_format_spirv\" to use SPIR-V shaders")
         }
         ShaderCacheSource::Wgsl(src) => ShaderSource::Wgsl(Cow::Owned(src)),
-        #[cfg(not(feature = "decoupled_naga"))]
         ShaderCacheSource::Naga(src) => ShaderSource::Naga(Cow::Owned(src)),
     };
     let module_descriptor = ShaderModuleDescriptor {
@@ -241,10 +243,9 @@ pub struct BevyAppComputePipelineCache {
     bindgroup_layout_cache: Arc<Mutex<BindGroupLayoutCache>>,
     shader_cache: Arc<Mutex<ShaderCache<WgpuWrapper<ShaderModule>, RenderDevice>>>,
     device: RenderDevice,
-    pipelines: Vec<CachedPipeline>,
+    pipelines: Vec<AppCachedPipeline>,
     waiting_pipelines: HashSet<CachedPipelineId>,
-    new_pipelines: Mutex<Vec<CachedPipeline>>,
-    global_shader_defs: Vec<ShaderDefVal>,
+    new_pipelines: Mutex<Vec<AppCachedPipeline>>,
     /// If `true`, disables asynchronous pipeline compilation.
     /// This has no effect on macOS, wasm, or without the `multi_threaded` feature.
     synchronous_pipeline_compilation: bool,
@@ -252,7 +253,7 @@ pub struct BevyAppComputePipelineCache {
 
 impl BevyAppComputePipelineCache {
     /// Returns an iterator over the pipelines in the pipeline cache.
-    pub fn pipelines(&self) -> impl Iterator<Item = &CachedPipeline> {
+    pub fn pipelines(&self) -> impl Iterator<Item = &AppCachedPipeline> {
         self.pipelines.iter()
     }
 
@@ -268,12 +269,6 @@ impl BevyAppComputePipelineCache {
         synchronous_pipeline_compilation: bool,
     ) -> Self {
         let mut global_shader_defs = Vec::new();
-        #[cfg(all(feature = "webgl", target_arch = "wasm32", not(feature = "webgpu")))]
-        {
-            global_shader_defs.push("NO_ARRAY_TEXTURES_SUPPORT".into());
-            global_shader_defs.push("NO_CUBE_ARRAY_TEXTURES_SUPPORT".into());
-            global_shader_defs.push("SIXTEEN_BYTE_ALIGNMENT".into());
-        }
 
         if cfg!(target_abi = "sim") {
             global_shader_defs.push("NO_CUBE_ARRAY_TEXTURES_SUPPORT".into());
@@ -296,7 +291,6 @@ impl BevyAppComputePipelineCache {
             waiting_pipelines: default(),
             new_pipelines: default(),
             pipelines: default(),
-            global_shader_defs,
             synchronous_pipeline_compilation,
         }
     }
@@ -305,7 +299,7 @@ impl BevyAppComputePipelineCache {
     ///
     /// See [`PipelineCache::queue_render_pipeline()`].
     #[inline]
-    pub fn get_render_pipeline_state(&self, id: CachedRenderPipelineId) -> &CachedPipelineState {
+    pub fn get_render_pipeline_state(&self, id: AppCachedRenderPipelineId) -> &CachedPipelineState {
         // If the pipeline id isn't in `pipelines`, it's queued in `new_pipelines`
         self.pipelines
             .get(id.0)
@@ -335,7 +329,7 @@ impl BevyAppComputePipelineCache {
     #[inline]
     pub fn get_render_pipeline_descriptor(
         &self,
-        id: CachedRenderPipelineId,
+        id: AppCachedRenderPipelineId,
     ) -> &RenderPipelineDescriptor {
         match &self.pipelines[id.0].descriptor {
             PipelineDescriptor::RenderPipelineDescriptor(descriptor) => descriptor,
@@ -368,7 +362,7 @@ impl BevyAppComputePipelineCache {
     /// was not created yet or if there was an error during creation. You can check the actual creation
     /// state with [`PipelineCache::get_render_pipeline_state()`].
     #[inline]
-    pub fn get_render_pipeline(&self, id: CachedRenderPipelineId) -> Option<&RenderPipeline> {
+    pub fn get_render_pipeline(&self, id: AppCachedRenderPipelineId) -> Option<&RenderPipeline> {
         if let CachedPipelineState::Ok(Pipeline::RenderPipeline(pipeline)) =
             &self.pipelines.get(id.0)?.state
         {
@@ -380,7 +374,7 @@ impl BevyAppComputePipelineCache {
 
     /// Wait for a render pipeline to finish compiling.
     #[inline]
-    pub fn block_on_render_pipeline(&mut self, id: CachedRenderPipelineId) {
+    pub fn block_on_render_pipeline(&mut self, id: AppCachedRenderPipelineId) {
         if self.pipelines.len() <= id.0 {
             self.process_queue();
         }
@@ -428,13 +422,13 @@ impl BevyAppComputePipelineCache {
     pub fn queue_render_pipeline(
         &self,
         descriptor: RenderPipelineDescriptor,
-    ) -> CachedRenderPipelineId {
+    ) -> AppCachedRenderPipelineId {
         let mut new_pipelines = self
             .new_pipelines
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let id = CachedRenderPipelineId(self.pipelines.len() + new_pipelines.len());
-        new_pipelines.push(CachedPipeline {
+        let id = AppCachedRenderPipelineId(self.pipelines.len() + new_pipelines.len());
+        new_pipelines.push(AppCachedPipeline {
             descriptor: PipelineDescriptor::RenderPipelineDescriptor(Box::new(descriptor)),
             state: CachedPipelineState::Queued,
         });
@@ -463,7 +457,7 @@ impl BevyAppComputePipelineCache {
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         let id = AppCachedComputePipelineId(self.pipelines.len() + new_pipelines.len());
-        new_pipelines.push(CachedPipeline {
+        new_pipelines.push(AppCachedPipeline {
             descriptor: PipelineDescriptor::ComputePipelineDescriptor(Box::new(descriptor)),
             state: CachedPipelineState::Queued,
         });
@@ -713,7 +707,7 @@ impl BevyAppComputePipelineCache {
         self.pipelines = pipelines;
     }
 
-    fn process_pipeline(&mut self, cached_pipeline: &mut CachedPipeline, id: usize) {
+    fn process_pipeline(&mut self, cached_pipeline: &mut AppCachedPipeline, id: usize) {
         match &mut cached_pipeline.state {
             CachedPipelineState::Queued => {
                 cached_pipeline.state = match &cached_pipeline.descriptor {
@@ -770,38 +764,9 @@ impl BevyAppComputePipelineCache {
     pub(crate) fn process_pipeline_queue_system(mut cache: ResMut<Self>) {
         cache.process_queue();
     }
-
-    pub(crate) fn extract_shaders(
-        mut cache: ResMut<Self>,
-        shaders: Extract<Res<Assets<Shader>>>,
-        mut events: Extract<MessageReader<AssetEvent<Shader>>>,
-    ) {
-        for event in events.read() {
-            #[expect(
-                clippy::match_same_arms,
-                reason = "LoadedWithDependencies is marked as a TODO, so it's likely this will no longer lint soon."
-            )]
-            match event {
-                // PERF: Instead of blocking waiting for the shader cache lock, try again next frame if the lock is currently held
-                AssetEvent::Added { id } | AssetEvent::Modified { id } => {
-                    if let Some(shader) = shaders.get(*id) {
-                        let mut shader = shader.clone();
-                        shader.shader_defs.extend(cache.global_shader_defs.clone());
-
-                        cache.set_shader(*id, shader);
-                    }
-                }
-                AssetEvent::Removed { id } => cache.remove_shader(*id),
-                AssetEvent::Unused { .. } => {}
-                AssetEvent::LoadedWithDependencies { .. } => {
-                    // TODO: handle this
-                }
-            }
-        }
-    }
 }
 
-fn pipeline_error_context(cached_pipeline: &CachedPipeline) -> String {
+fn pipeline_error_context(cached_pipeline: &AppCachedPipeline) -> String {
     fn format(
         shader: &Handle<Shader>,
         entry: &Option<Cow<'static, str>>,

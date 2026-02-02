@@ -11,7 +11,7 @@ use bevy::{
 use pipeline_cache::BevyAppComputePipelineCache;
 
 mod error;
-mod pipeline_cache;
+pub mod pipeline_cache;
 mod plugin;
 mod traits;
 mod worker;
