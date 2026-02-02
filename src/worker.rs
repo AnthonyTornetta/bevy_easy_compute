@@ -369,12 +369,13 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
                 wgpu::PollStatus::WaitSucceeded => unreachable!(),
             }
         } else {
-            match self
-                .render_device
-                .wgpu_device()
-                .poll(wgpu::PollType::Wait)
-                .unwrap()
-            {
+            let Ok(poll_status) = self.render_device.wgpu_device().poll(wgpu::PollType::Wait)
+            else {
+                // Error can be returned in case of timeout - returning `false` will cause a retry next frame.
+                return false;
+            };
+
+            match poll_status {
                 wgpu::PollStatus::QueueEmpty => true,
                 wgpu::PollStatus::WaitSucceeded => false,
                 wgpu::PollStatus::Poll => unreachable!(),
