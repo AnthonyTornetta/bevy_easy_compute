@@ -15,7 +15,7 @@ use bevy::{
 use wgpu::{BufferDescriptor, BufferUsages, util::BufferInitDescriptor};
 
 use crate::{
-    pipeline_cache::{AppCachedComputePipelineId, PipelineCache},
+    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::{ComputeShader, ComputeWorker},
     worker::{AppComputeWorker, ComputePass, RunMode, StagingBuffer, Step},
 };
@@ -250,7 +250,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
     /// They will run sequentially in the order you insert them.
     pub fn add_pass<S: ComputeShader>(&mut self, workgroups: [u32; 3], vars: &[&str]) -> &mut Self {
         if !self.cached_pipeline_ids.contains_key(S::type_path()) {
-            let pipeline_cache = self.world.resource::<PipelineCache>();
+            let pipeline_cache = self.world.resource::<BevyAppComputePipelineCache>();
 
             let asset_server = self.world.resource::<AssetServer>();
             let shader = match S::shader() {

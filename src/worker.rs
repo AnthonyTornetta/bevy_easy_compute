@@ -12,13 +12,14 @@ use bevy::{
         render_resource::{Buffer, ComputePipeline},
         renderer::{RenderDevice, RenderQueue},
     },
+    shader::CachedPipelineId,
 };
 use bytemuck::{AnyBitPattern, NoUninit, bytes_of, cast_slice, from_bytes};
 use wgpu::{BindGroupEntry, CommandEncoder, CommandEncoderDescriptor, ComputePassDescriptor};
 
 use crate::{
     error::{Error, Result},
-    pipeline_cache::{AppCachedComputePipelineId, PipelineCache},
+    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::ComputeWorker,
     worker_builder::AppComputeWorkerBuilder,
 };
@@ -187,7 +188,8 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
             return Err(Error::BufferNotFound(buf_b_name.to_owned()));
         }
 
-        let [Some(buffer_a), Some(buffer_b)] = self.buffers.get_many_mut([buf_a_name, buf_b_name])
+        let [Some(buffer_a), Some(buffer_b)] =
+            self.buffers.get_disjoint_mut([buf_a_name, buf_b_name])
         else {
             panic!("get_many_mut(): returned None buffer.")
         };
@@ -369,8 +371,11 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
                 wgpu::PollStatus::WaitSucceeded => unreachable!(),
             }
         } else {
-            let Ok(poll_status) = self.render_device.wgpu_device().poll(wgpu::PollType::Wait)
-            else {
+            let Ok(poll_status) = self.render_device.wgpu_device().poll(wgpu::PollType::Wait {
+                submission_index: None,
+                // Should this be user-specified? This will currently wait indefinitely
+                timeout: None,
+            }) else {
                 // Error can be returned in case of timeout - returning `false` will cause a retry next frame.
                 return false;
             };
@@ -459,7 +464,10 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
         }
     }
 
-    pub(crate) fn extract_pipelines(mut worker: ResMut<Self>, pipeline_cache: Res<PipelineCache>) {
+    pub(crate) fn extract_pipelines(
+        mut worker: ResMut<Self>,
+        pipeline_cache: Res<BevyAppComputePipelineCache>,
+    ) {
         for (type_path, cached_id) in &worker.cached_pipeline_ids.clone() {
             let Some(pipeline) = worker.pipelines.get(type_path) else {
                 continue;

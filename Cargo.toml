@@ -44,8 +44,7 @@ version = "0.18"
 default-features = false
 # See https://github.com/bevyengine/bevy/blob/main/docs/cargo_features.md
 features = [
-  "bevy_render",
-  "bevy_tasks"
+  "bevy_render"
 ]
 
 [dev-dependencies]
