@@ -1,20 +1,21 @@
 use std::{borrow::Cow, marker::PhantomData, time::Duration};
 
 use bevy::{
+    platform::collections::HashMap,
     prelude::{AssetServer, World},
     render::{
         render_resource::{
-            encase::{private::WriteInto, StorageBuffer, UniformBuffer},
-            Buffer, ComputePipelineDescriptor, ShaderRef, ShaderType,
+            Buffer, ComputePipelineDescriptor, ShaderType,
+            encase::{StorageBuffer, UniformBuffer, private::WriteInto},
         },
         renderer::RenderDevice,
     },
-    utils::HashMap,
+    shader::ShaderRef,
 };
-use wgpu::{util::BufferInitDescriptor, BufferDescriptor, BufferUsages};
+use wgpu::{BufferDescriptor, BufferUsages, util::BufferInitDescriptor};
 
 use crate::{
-    pipeline_cache::{AppPipelineCache, CachedAppComputePipelineId},
+    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::{ComputeShader, ComputeWorker},
     worker::{AppComputeWorker, ComputePass, RunMode, StagingBuffer, Step},
 };
@@ -23,7 +24,7 @@ use crate::{
 /// from your structs implementing [`ComputeWorker`]
 pub struct AppComputeWorkerBuilder<'a, W: ComputeWorker> {
     pub(crate) world: &'a mut World,
-    pub(crate) cached_pipeline_ids: HashMap<String, CachedAppComputePipelineId>,
+    pub(crate) cached_pipeline_ids: HashMap<String, AppCachedComputePipelineId>,
     pub(crate) buffers: HashMap<String, Buffer>,
     pub(crate) staging_buffers: HashMap<String, StagingBuffer>,
     pub(crate) steps: Vec<Step>,
@@ -249,7 +250,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
     /// They will run sequentially in the order you insert them.
     pub fn add_pass<S: ComputeShader>(&mut self, workgroups: [u32; 3], vars: &[&str]) -> &mut Self {
         if !self.cached_pipeline_ids.contains_key(S::type_path()) {
-            let pipeline_cache = self.world.resource::<AppPipelineCache>();
+            let pipeline_cache = self.world.resource::<BevyAppComputePipelineCache>();
 
             let asset_server = self.world.resource::<AssetServer>();
             let shader = match S::shader() {
@@ -259,18 +260,20 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
             }
             .unwrap();
 
-            let cached_id = pipeline_cache.queue_app_compute_pipeline(ComputePipelineDescriptor {
+            let cached_id = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
                 label: None,
                 layout: S::layouts().to_vec(),
                 push_constant_ranges: S::push_constant_ranges().to_vec(),
                 shader_defs: S::shader_defs().to_vec(),
-                entry_point: Cow::Borrowed(S::entry_point()),
+                entry_point: Some(Cow::Borrowed(S::entry_point())),
                 shader,
                 zero_initialize_workgroup_memory: false,
             });
 
-            self.cached_pipeline_ids
-                .insert(S::type_path().to_string(), cached_id);
+            self.cached_pipeline_ids.insert(
+                S::type_path().to_string(),
+                AppCachedComputePipelineId(cached_id.id()),
+            );
         }
 
         self.steps.push(Step::ComputePass(ComputePass {

@@ -1,11 +1,17 @@
 #![doc = include_str!("../README.md")]
 
-use bevy::prelude::{AssetEvent, Assets, EventReader, Res, ResMut, Shader};
-
-use pipeline_cache::AppPipelineCache;
+use bevy::{
+    asset::{AssetEvent, Assets},
+    ecs::{
+        message::MessageReader,
+        system::{Res, ResMut},
+    },
+    shader::Shader,
+};
+use pipeline_cache::BevyAppComputePipelineCache;
 
 mod error;
-mod pipeline_cache;
+pub mod pipeline_cache;
 mod plugin;
 mod traits;
 mod worker;
@@ -24,29 +30,26 @@ pub mod prelude {
     };
 
     // Since these are always used when using this crate
-    pub use bevy::render::render_resource::{ShaderRef, ShaderType};
-}
-
-pub(crate) fn process_pipeline_queue_system(mut pipeline_cache: ResMut<AppPipelineCache>) {
-    pipeline_cache.process_queue();
+    pub use bevy::render::render_resource::ShaderType;
+    pub use bevy::shader::ShaderRef;
 }
 
 pub(crate) fn extract_shaders(
-    mut pipeline_cache: ResMut<AppPipelineCache>,
+    mut pipeline_cache: ResMut<BevyAppComputePipelineCache>,
     shaders: Res<Assets<Shader>>,
-    mut events: EventReader<AssetEvent<Shader>>,
+    mut events: MessageReader<AssetEvent<Shader>>,
 ) {
     for event in events.read() {
         match event {
             AssetEvent::Added { id: shader_id } | AssetEvent::Modified { id: shader_id } => {
                 if let Some(shader) = shaders.get(*shader_id) {
-                    pipeline_cache.set_shader(shader_id, shader);
+                    pipeline_cache.set_shader(*shader_id, shader.clone());
                 }
             }
-            AssetEvent::Removed { id: shader_id } => pipeline_cache.remove_shader(shader_id),
+            AssetEvent::Removed { id: shader_id } => pipeline_cache.remove_shader(*shader_id),
             AssetEvent::LoadedWithDependencies { id: shader_id } => {
                 if let Some(shader) = shaders.get(*shader_id) {
-                    pipeline_cache.set_shader(shader_id, shader);
+                    pipeline_cache.set_shader(*shader_id, shader.clone());
                 }
             }
             AssetEvent::Unused { id: _ } => (),

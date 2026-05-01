@@ -6,19 +6,20 @@ use std::{
 };
 
 use bevy::{
+    platform::collections::HashMap,
     prelude::{Res, ResMut, Resource},
     render::{
         render_resource::{Buffer, ComputePipeline},
         renderer::{RenderDevice, RenderQueue},
     },
-    utils::HashMap,
+    shader::CachedPipelineId,
 };
-use bytemuck::{bytes_of, cast_slice, from_bytes, AnyBitPattern, NoUninit};
+use bytemuck::{AnyBitPattern, NoUninit, bytes_of, cast_slice, from_bytes};
 use wgpu::{BindGroupEntry, CommandEncoder, CommandEncoderDescriptor, ComputePassDescriptor};
 
 use crate::{
     error::{Error, Result},
-    pipeline_cache::{AppPipelineCache, CachedAppComputePipelineId},
+    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::ComputeWorker,
     worker_builder::AppComputeWorkerBuilder,
 };
@@ -29,7 +30,7 @@ pub enum RunMode {
     OneShot(bool),
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum WorkerState {
     Created,
     Available,
@@ -67,7 +68,7 @@ pub struct AppComputeWorker<W: ComputeWorker> {
     pub(crate) state: WorkerState,
     render_device: RenderDevice,
     render_queue: RenderQueue,
-    cached_pipeline_ids: HashMap<String, CachedAppComputePipelineId>,
+    cached_pipeline_ids: HashMap<String, AppCachedComputePipelineId>,
     pipelines: HashMap<String, Option<ComputePipeline>>,
     buffers: HashMap<String, Buffer>,
     staging_buffers: HashMap<String, StagingBuffer>,
@@ -174,7 +175,7 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
     fn swap(&mut self, index: usize) -> Result<()> {
         let (buf_a_name, buf_b_name) = match &self.steps[index] {
             Step::ComputePass(_) => {
-                return Err(Error::InvalidStep(format!("{:?}", self.steps[index])))
+                return Err(Error::InvalidStep(format!("{:?}", self.steps[index])));
             }
             Step::Swap(a, b) => (a.as_str(), b.as_str()),
         };
@@ -187,7 +188,12 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
             return Err(Error::BufferNotFound(buf_b_name.to_owned()));
         }
 
-        let [buffer_a, buffer_b] = self.buffers.get_many_mut([buf_a_name, buf_b_name]).unwrap();
+        let [Some(buffer_a), Some(buffer_b)] =
+            self.buffers.get_disjoint_mut([buf_a_name, buf_b_name])
+        else {
+            panic!("get_many_mut(): returned None buffer.")
+        };
+
         std::mem::swap(buffer_a, buffer_b);
 
         Ok(())
@@ -230,7 +236,7 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
 
     /// Read data from `target` staging buffer, return raw bytes
     #[inline]
-    pub fn try_read_raw<'a>(&'a self, target: &str) -> Result<(impl Deref<Target = [u8]> + 'a)> {
+    pub fn try_read_raw<'a>(&'a self, target: &str) -> Result<impl Deref<Target = [u8]> + 'a> {
         let Some(staging_buffer) = &self.staging_buffers.get(target) else {
             return Err(Error::StagingBufferNotFound(target.to_owned()));
         };
@@ -243,7 +249,7 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
     /// Read data from `target` staging buffer, return raw bytes
     /// Panics on error.
     #[inline]
-    pub fn read_raw<'a>(&'a self, target: &str) -> (impl Deref<Target = [u8]> + 'a) {
+    pub fn read_raw<'a>(&'a self, target: &str) -> impl Deref<Target = [u8]> + 'a {
         self.try_read_raw(target).unwrap()
     }
 
@@ -347,29 +353,37 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
             match self
                 .render_device
                 .wgpu_device()
-                .poll(wgpu::MaintainBase::Poll)
+                .poll(wgpu::PollType::Poll)
+                .unwrap()
             {
                 // The first few times the poll occurs the queue will be empty, because wgpu hasn't started anything yet.
-                // We need to wait until `MaintainResult::Ok`, which means wgpu has started to process our data.
-                // Then, the next time the queue is empty (`MaintainResult::SubmissionQueueEmpty`), wgpu has finished processing the data and we are done.
-                wgpu::MaintainResult::SubmissionQueueEmpty => {
+                // We need to wait until `PollStatus::Poll`, which means wgpu has started to process our data.
+                // Then, the next time the queue is empty (`PollStatus::QueueEmpty`), wgpu has finished processing the data and we are done.
+                wgpu::PollStatus::QueueEmpty => {
                     let res = self.submission_queue_processed;
                     self.submission_queue_processed = false;
                     res
                 }
-                wgpu::MaintainResult::Ok => {
+                wgpu::PollStatus::Poll => {
                     self.submission_queue_processed = true;
                     false
                 }
+                wgpu::PollStatus::WaitSucceeded => unreachable!(),
             }
         } else {
-            match self
-                .render_device
-                .wgpu_device()
-                .poll(wgpu::MaintainBase::Wait)
-            {
-                wgpu::MaintainResult::SubmissionQueueEmpty => true,
-                wgpu::MaintainResult::Ok => false,
+            let Ok(poll_status) = self.render_device.wgpu_device().poll(wgpu::PollType::Wait {
+                submission_index: None,
+                // Should this be user-specified? This will currently wait indefinitely
+                timeout: None,
+            }) else {
+                // Error can be returned in case of timeout - returning `false` will cause a retry next frame.
+                return false;
+            };
+
+            match poll_status {
+                wgpu::PollStatus::QueueEmpty => true,
+                wgpu::PollStatus::WaitSucceeded => false,
+                wgpu::PollStatus::Poll => unreachable!(),
             }
         }
     }
@@ -452,7 +466,7 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
 
     pub(crate) fn extract_pipelines(
         mut worker: ResMut<Self>,
-        pipeline_cache: Res<AppPipelineCache>,
+        pipeline_cache: Res<BevyAppComputePipelineCache>,
     ) {
         for (type_path, cached_id) in &worker.cached_pipeline_ids.clone() {
             let Some(pipeline) = worker.pipelines.get(type_path) else {

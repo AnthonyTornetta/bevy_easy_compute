@@ -2,7 +2,7 @@
 //! input for the next pass.
 
 use bevy::{prelude::*, reflect::TypePath};
-use bevy_easy_compute::prelude::*;
+use bevy_app_compute::prelude::*;
 
 #[derive(TypePath)]
 struct FirstPassShader;
@@ -51,6 +51,7 @@ fn main() {
                     primary_window: None,
                     exit_condition: bevy::window::ExitCondition::DontExit,
                     close_when_requested: false,
+                    primary_cursor_options: None,
                 }),
         )
         .add_plugins(AppComputePlugin)
