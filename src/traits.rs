@@ -1,7 +1,7 @@
 use bevy::{
     prelude::World,
     reflect::TypePath,
-    render::render_resource::BindGroupLayout,
+    render::render_resource::BindGroupLayoutDescriptor,
     shader::{ShaderDefVal, ShaderRef},
 };
 use wgpu::PushConstantRange;
@@ -32,7 +32,7 @@ pub trait ComputeShader: TypePath + Send + Sync + 'static {
 
     /// If you don't want to use wgpu's reflection for
     /// your binding layout, you can declare them here.
-    fn layouts<'a>() -> &'a [BindGroupLayout] {
+    fn layouts<'a>() -> &'a [BindGroupLayoutDescriptor] {
         &[]
     }
 

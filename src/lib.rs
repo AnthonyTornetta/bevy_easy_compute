@@ -8,10 +8,10 @@ use bevy::{
     },
     shader::Shader,
 };
-use pipeline_cache::PipelineCache;
+use pipeline_cache::BevyAppComputePipelineCache;
 
 mod error;
-mod pipeline_cache;
+pub mod pipeline_cache;
 mod plugin;
 mod traits;
 mod worker;
@@ -35,7 +35,7 @@ pub mod prelude {
 }
 
 pub(crate) fn extract_shaders(
-    mut pipeline_cache: ResMut<PipelineCache>,
+    mut pipeline_cache: ResMut<BevyAppComputePipelineCache>,
     shaders: Res<Assets<Shader>>,
     mut events: MessageReader<AssetEvent<Shader>>,
 ) {
@@ -43,13 +43,13 @@ pub(crate) fn extract_shaders(
         match event {
             AssetEvent::Added { id: shader_id } | AssetEvent::Modified { id: shader_id } => {
                 if let Some(shader) = shaders.get(*shader_id) {
-                    pipeline_cache.set_shader(*shader_id, shader);
+                    pipeline_cache.set_shader(*shader_id, shader.clone());
                 }
             }
             AssetEvent::Removed { id: shader_id } => pipeline_cache.remove_shader(*shader_id),
             AssetEvent::LoadedWithDependencies { id: shader_id } => {
                 if let Some(shader) = shaders.get(*shader_id) {
-                    pipeline_cache.set_shader(*shader_id, shader);
+                    pipeline_cache.set_shader(*shader_id, shader.clone());
                 }
             }
             AssetEvent::Unused { id: _ } => (),

@@ -3,13 +3,14 @@ use bevy::{
     render::{
         extract_resource::ExtractResource,
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, ShaderStages,
+            BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
+            ShaderStages,
             binding_types::{storage_buffer, uniform_buffer},
         },
         renderer::RenderDevice,
     },
 };
-use bevy_app_compute::prelude::*;
+use bevy_app_compute::{pipeline_cache::BevyAppComputePipelineCache, prelude::*};
 
 use crate::worker::{
     CELLS_IN_BUFFER, CELLS_OUT_BUFFER, GameOfLifeWorker, SETTINGS_BUFFER, Settings,
@@ -18,14 +19,13 @@ use crate::worker::{
 /// The bind group layout for the minimal data needed to render particle
 #[derive(Resource, ExtractResource, Clone)]
 pub struct ParticleBindGroupLayout {
-    /// The bind group layout itself
-    pub bind_group_layout: BindGroupLayout,
+    /// The bind group layout descriptor
+    pub bind_group_descriptor: BindGroupLayoutDescriptor,
 }
 
 impl FromWorld for ParticleBindGroupLayout {
-    fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let bind_group_layout = render_device.create_bind_group_layout(
+    fn from_world(_: &mut World) -> Self {
+        let bind_group_descriptor = BindGroupLayoutDescriptor::new(
             "ParticlesLayout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::VERTEX | ShaderStages::FRAGMENT,
@@ -37,7 +37,9 @@ impl FromWorld for ParticleBindGroupLayout {
             ),
         );
 
-        Self { bind_group_layout }
+        Self {
+            bind_group_descriptor,
+        }
     }
 }
 
@@ -53,10 +55,11 @@ pub fn get_buffers_for_renderer(world: &mut World) {
     let render_device = world.resource::<RenderDevice>();
     let bind_group_layout = world.resource::<ParticleBindGroupLayout>();
     let compute_worker = world.resource::<AppComputeWorker<GameOfLifeWorker>>();
+    let pipeline_cache = world.resource::<BevyAppComputePipelineCache>();
 
     let bind_group = render_device.create_bind_group(
         None,
-        &bind_group_layout.bind_group_layout,
+        &pipeline_cache.get_bind_group_layout(&bind_group_layout.bind_group_descriptor),
         &BindGroupEntries::sequential((
             compute_worker
                 .get_buffer(SETTINGS_BUFFER)
