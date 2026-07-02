@@ -4,8 +4,6 @@ use bevy::{
     render::render_resource::BindGroupLayoutDescriptor,
     shader::{ShaderDefVal, ShaderRef},
 };
-use wgpu::PushConstantRange;
-
 use crate::worker::AppComputeWorker;
 
 /// Trait to declare [`AppComputeWorker<W>`] structs.
@@ -34,8 +32,8 @@ pub trait ComputeShader: TypePath + Send + Sync + 'static {
     fn shader_defs<'a>() -> &'a [ShaderDefVal] {
         &[]
     }
-    fn push_constant_ranges<'a>() -> &'a [PushConstantRange] {
-        &[]
+    fn immediate_size() -> u32 {
+        0
     }
 
     /// By default, the shader entry point is `main`.

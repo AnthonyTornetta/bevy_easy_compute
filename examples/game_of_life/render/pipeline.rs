@@ -29,7 +29,7 @@ impl FromWorld for DrawParticlePipeline {
             bevy::render::render_resource::RenderPipelineDescriptor {
                 label: None,
                 layout: [bindings.bind_group_descriptor.clone()].to_vec(),
-                push_constant_ranges: Vec::new(),
+                immediate_size: 0,
                 vertex: VertexState {
                     shader: shader.clone(),
                     entry_point: Some("vertex".into()),

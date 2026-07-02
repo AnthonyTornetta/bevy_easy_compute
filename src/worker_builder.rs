@@ -262,7 +262,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
             let cached_id = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
                 label: None,
                 layout: S::layouts().to_vec(),
-                push_constant_ranges: S::push_constant_ranges().to_vec(),
+                immediate_size: S::immediate_size(),
                 shader_defs: S::shader_defs().to_vec(),
                 entry_point: Some(Cow::Borrowed(S::entry_point())),
                 shader,
