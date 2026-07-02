@@ -6,12 +6,11 @@ use bevy::{
         message::MessageReader,
         system::{Res, ResMut},
     },
+    render::render_resource::PipelineCache,
     shader::Shader,
 };
-use pipeline_cache::BevyAppComputePipelineCache;
 
 mod error;
-pub mod pipeline_cache;
 mod plugin;
 mod traits;
 mod worker;
@@ -35,7 +34,7 @@ pub mod prelude {
 }
 
 pub(crate) fn extract_shaders(
-    mut pipeline_cache: ResMut<BevyAppComputePipelineCache>,
+    mut pipeline_cache: ResMut<PipelineCache>,
     shaders: Res<Assets<Shader>>,
     mut events: MessageReader<AssetEvent<Shader>>,
 ) {
