@@ -9,17 +9,15 @@ use bevy::{
     platform::collections::HashMap,
     prelude::{Res, ResMut, Resource},
     render::{
-        render_resource::{Buffer, ComputePipeline},
+        render_resource::{Buffer, CachedComputePipelineId, ComputePipeline, PipelineCache},
         renderer::{RenderDevice, RenderQueue},
     },
-    shader::CachedPipelineId,
 };
 use bytemuck::{AnyBitPattern, NoUninit, bytes_of, cast_slice, from_bytes};
 use wgpu::{BindGroupEntry, CommandEncoder, CommandEncoderDescriptor, ComputePassDescriptor};
 
 use crate::{
     error::{Error, Result},
-    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::ComputeWorker,
     worker_builder::AppComputeWorkerBuilder,
 };
@@ -68,7 +66,7 @@ pub struct AppComputeWorker<W: ComputeWorker> {
     pub(crate) state: WorkerState,
     render_device: RenderDevice,
     render_queue: RenderQueue,
-    cached_pipeline_ids: HashMap<String, AppCachedComputePipelineId>,
+    cached_pipeline_ids: HashMap<String, CachedComputePipelineId>,
     pipelines: HashMap<String, Option<ComputePipeline>>,
     buffers: HashMap<String, Buffer>,
     staging_buffers: HashMap<String, StagingBuffer>,
@@ -464,10 +462,7 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
         }
     }
 
-    pub(crate) fn extract_pipelines(
-        mut worker: ResMut<Self>,
-        pipeline_cache: Res<BevyAppComputePipelineCache>,
-    ) {
+    pub(crate) fn extract_pipelines(mut worker: ResMut<Self>, pipeline_cache: Res<PipelineCache>) {
         for (type_path, cached_id) in &worker.cached_pipeline_ids.clone() {
             let Some(pipeline) = worker.pipelines.get(type_path) else {
                 continue;

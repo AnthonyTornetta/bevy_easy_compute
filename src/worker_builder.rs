@@ -5,7 +5,7 @@ use bevy::{
     prelude::{AssetServer, World},
     render::{
         render_resource::{
-            Buffer, ComputePipelineDescriptor, ShaderType,
+            Buffer, CachedComputePipelineId, ComputePipelineDescriptor, PipelineCache, ShaderType,
             encase::{StorageBuffer, UniformBuffer, private::WriteInto},
         },
         renderer::RenderDevice,
@@ -15,7 +15,6 @@ use bevy::{
 use wgpu::{BufferDescriptor, BufferUsages, util::BufferInitDescriptor};
 
 use crate::{
-    pipeline_cache::{AppCachedComputePipelineId, BevyAppComputePipelineCache},
     traits::{ComputeShader, ComputeWorker},
     worker::{AppComputeWorker, ComputePass, RunMode, StagingBuffer, Step},
 };
@@ -24,7 +23,7 @@ use crate::{
 /// from your structs implementing [`ComputeWorker`]
 pub struct AppComputeWorkerBuilder<'a, W: ComputeWorker> {
     pub(crate) world: &'a mut World,
-    pub(crate) cached_pipeline_ids: HashMap<String, AppCachedComputePipelineId>,
+    pub(crate) cached_pipeline_ids: HashMap<String, CachedComputePipelineId>,
     pub(crate) buffers: HashMap<String, Buffer>,
     pub(crate) staging_buffers: HashMap<String, StagingBuffer>,
     pub(crate) steps: Vec<Step>,
@@ -250,7 +249,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
     /// They will run sequentially in the order you insert them.
     pub fn add_pass<S: ComputeShader>(&mut self, workgroups: [u32; 3], vars: &[&str]) -> &mut Self {
         if !self.cached_pipeline_ids.contains_key(S::type_path()) {
-            let pipeline_cache = self.world.resource::<BevyAppComputePipelineCache>();
+            let pipeline_cache = self.world.resource::<PipelineCache>();
 
             let asset_server = self.world.resource::<AssetServer>();
             let shader = match S::shader() {
@@ -263,7 +262,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
             let cached_id = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
                 label: None,
                 layout: S::layouts().to_vec(),
-                push_constant_ranges: S::push_constant_ranges().to_vec(),
+                immediate_size: S::immediate_size(),
                 shader_defs: S::shader_defs().to_vec(),
                 entry_point: Some(Cow::Borrowed(S::entry_point())),
                 shader,
@@ -272,7 +271,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
 
             self.cached_pipeline_ids.insert(
                 S::type_path().to_string(),
-                AppCachedComputePipelineId(cached_id.id()),
+                CachedComputePipelineId::new(cached_id.id()),
             );
         }
 

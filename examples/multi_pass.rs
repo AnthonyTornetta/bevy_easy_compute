@@ -27,9 +27,6 @@ struct SimpleComputeWorker;
 
 impl ComputeWorker for SimpleComputeWorker {
     fn build(world: &mut World) -> AppComputeWorker<Self> {
-        // [1. + 3., 2. + 3., 3. + 3., 4. + 3.] = [4., 5., 6., 7.]
-        // [4. * 4., 5. * 5., 6. * 6., 7. * 7.] = [16., 25., 36., 49.]
-
         AppComputeWorkerBuilder::new(world)
             .add_uniform("value", &3.)
             .add_storage("input", &[1., 2., 3., 4.])
@@ -37,6 +34,9 @@ impl ComputeWorker for SimpleComputeWorker {
             .add_pass::<FirstPassShader>([4, 1, 1], &["value", "input", "output"]) // add each item + `value` from `input` to `output`
             .add_pass::<SecondPassShader>([4, 1, 1], &["output"]) // multiply each element of `output` by itself
             .build()
+
+        // [1. + 3., 2. + 3., 3. + 3., 4. + 3.] = [4., 5., 6., 7.]
+        // [4. * 4., 5. * 5., 6. * 6., 7. * 7.] = [16., 25., 36., 49.]
     }
 }
 

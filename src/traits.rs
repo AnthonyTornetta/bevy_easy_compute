@@ -4,21 +4,20 @@ use bevy::{
     render::render_resource::BindGroupLayoutDescriptor,
     shader::{ShaderDefVal, ShaderRef},
 };
-use wgpu::PushConstantRange;
 
 use crate::worker::AppComputeWorker;
 
 /// Trait to declare [`AppComputeWorker<W>`] structs.
-///
-/// # PLEASE NOTE
-/// It is up to you to call the build method in one of your systems.
-///
-/// This is to allow the dynamic loading of compute shaders.
 pub trait ComputeWorker: Sized + Send + Sync + 'static {
     fn build(world: &mut World) -> AppComputeWorker<Self>;
 }
 
 /// Trait to declare your shaders.
+///
+/// # PLEASE NOTE
+/// It is up to you to call the build method in one of your systems.
+///
+/// This is to allow the dynamic loading of compute shaders.
 pub trait ComputeShader: TypePath + Send + Sync + 'static {
     /// Implement your [`ShaderRef`]
     ///
@@ -39,8 +38,8 @@ pub trait ComputeShader: TypePath + Send + Sync + 'static {
     fn shader_defs<'a>() -> &'a [ShaderDefVal] {
         &[]
     }
-    fn push_constant_ranges<'a>() -> &'a [PushConstantRange] {
-        &[]
+    fn immediate_size() -> u32 {
+        0
     }
 
     /// By default, the shader entry point is `main`.
