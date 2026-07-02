@@ -13,6 +13,10 @@ use crate::{extract_shaders, traits::ComputeWorker, worker::AppComputeWorker};
 /// The main plugin. Always include it if you want to use `bevy_app_compute`
 pub struct AppComputePlugin;
 
+fn process_pipeline_queue_system(mut cache: ResMut<PipelineCache>) {
+    cache.process_queue();
+}
+
 impl Plugin for AppComputePlugin {
     fn build(&self, _app: &mut App) {}
 
@@ -27,8 +31,7 @@ impl Plugin for AppComputePlugin {
             .add_systems(PreUpdate, extract_shaders)
             .add_systems(
                 Update,
-                PipelineCache::process_pipeline_queue_system
-                    .in_set(BevyEasyComputeSet::ExtractPipelines),
+                process_pipeline_queue_system.in_set(BevyEasyComputeSet::ExtractPipelines),
             );
     }
 }
@@ -73,7 +76,7 @@ impl<W: ComputeWorker> Plugin for AppComputeWorkerPlugin<W> {
                 Update,
                 AppComputeWorker::<W>::extract_pipelines
                     .in_set(BevyEasyComputeSet::ExtractPipelines)
-                    .after(PipelineCache::process_pipeline_queue_system),
+                    .after(process_pipeline_queue_system),
             )
             .add_systems(
                 PostUpdate,
