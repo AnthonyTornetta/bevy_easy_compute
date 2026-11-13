@@ -8,6 +8,7 @@ pub enum Error {
     PipelinesEmpty,
     PipelineNotReady,
     EncoderIsNone,
+    BufferMapRange(wgpu::MapRangeError),
 }
 
 impl std::error::Error for Error {}
@@ -23,6 +24,7 @@ impl std::fmt::Display for Error {
             Error::InvalidStep(step) => write!(f, "Invalid step `{step}`."),
             Error::PipelineNotReady => write!(f, "Pipeline isn't ready yet."),
             Error::EncoderIsNone => write!(f, "The command encoder hasn't been initialized."),
+            Error::BufferMapRange(err) => write!(f, "Failed to read mapped buffer: {err}"),
         }
     }
 }

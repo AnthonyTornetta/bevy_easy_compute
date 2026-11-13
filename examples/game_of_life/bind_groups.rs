@@ -1,6 +1,7 @@
 use bevy::{
     prelude::*,
     render::{
+        RenderApp,
         extract_resource::ExtractResource,
         render_resource::{
             BindGroup, BindGroupEntries, BindGroupLayoutDescriptor, BindGroupLayoutEntries,
@@ -18,6 +19,7 @@ use crate::worker::{
 
 /// The bind group layout for the minimal data needed to render particle
 #[derive(Resource, ExtractResource, Clone)]
+#[extract_app(RenderApp)]
 pub struct ParticleBindGroupLayout {
     /// The bind group layout descriptor
     pub bind_group_descriptor: BindGroupLayoutDescriptor,
@@ -45,6 +47,7 @@ impl FromWorld for ParticleBindGroupLayout {
 
 /// The bind group data for rendering particles as pixels
 #[derive(Resource, ExtractResource, Clone)]
+#[extract_app(RenderApp)]
 pub struct ParticleBindGroup {
     /// The bind group itself
     pub bind_group: BindGroup,

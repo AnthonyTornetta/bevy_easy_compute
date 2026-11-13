@@ -239,7 +239,11 @@ impl<W: ComputeWorker> AppComputeWorker<W> {
             return Err(Error::StagingBufferNotFound(target.to_owned()));
         };
 
-        let result = staging_buffer.buffer.slice(..).get_mapped_range();
+        let result = staging_buffer
+            .buffer
+            .slice(..)
+            .get_mapped_range()
+            .map_err(Error::BufferMapRange)?;
 
         Ok(result)
     }

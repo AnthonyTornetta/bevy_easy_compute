@@ -18,7 +18,7 @@ Add the following line to your `Cargo.toml`
 
 ```toml
 [dependencies]
-bevy_app_compute = "0.16"
+bevy_app_compute = "0.17"
 ```
 
 ## Usage
@@ -180,3 +180,9 @@ See [examples](https://github.com/Kjolnyr/bevy_app_compute/tree/main/examples)
 | Bevy | bevy_app_compute |
 | ---- | ---------------- |
 | 0.16 | 0.16             |
+| 0.20 | 0.17             |
+
+Bevy 0.20 supports WESL shaders (`.wesl`) by default. The
+`shader_format_wesl` feature remains available for compatibility but is no longer
+required. Plain WGSL shaders (`.wgsl`) continue to work. Shaders using naga_oil
+preprocessor directives must be migrated to WESL.
