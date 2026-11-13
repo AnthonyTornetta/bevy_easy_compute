@@ -264,6 +264,7 @@ impl<'a, W: ComputeWorker> AppComputeWorkerBuilder<'a, W> {
                 layout: S::layouts().to_vec(),
                 immediate_size: S::immediate_size(),
                 shader_defs: S::shader_defs().to_vec(),
+                constants: vec![],
                 entry_point: Some(Cow::Borrowed(S::entry_point())),
                 shader,
                 zero_initialize_workgroup_memory: false,

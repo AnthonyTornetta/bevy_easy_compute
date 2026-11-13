@@ -2,10 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::{
     prelude::*,
-    render::{
-        render_resource::PipelineCache,
-        renderer::{RenderAdapter, RenderDevice},
-    },
+    render::{render_resource::PipelineCache, renderer::RenderDevice},
 };
 
 use crate::{extract_shaders, traits::ComputeWorker, worker::AppComputeWorker};
@@ -22,12 +19,11 @@ impl Plugin for AppComputePlugin {
 
     fn finish(&self, app: &mut App) {
         let render_device = app.world().resource::<RenderDevice>().clone();
-        let render_adapter = app.world().resource::<RenderAdapter>().clone();
 
         app.configure_sets(Update, BevyEasyComputeSet::ExtractPipelines)
             .configure_sets(PostUpdate, BevyEasyComputePostUpdateSet::ExecuteCompute);
 
-        app.insert_resource(PipelineCache::new(render_device, render_adapter, true))
+        app.insert_resource(PipelineCache::new(render_device, true))
             .add_systems(PreUpdate, extract_shaders)
             .add_systems(
                 Update,

@@ -31,11 +31,13 @@ impl FromWorld for DrawParticlePipeline {
                     shader: shader.clone(),
                     entry_point: Some("vertex".into()),
                     shader_defs: vec![],
+                    constants: vec![],
                     buffers: vec![],
                 },
                 fragment: Some(FragmentState {
                     shader,
                     shader_defs: vec![],
+                    constants: vec![],
                     entry_point: Some("fragment".into()),
                     targets: vec![Some(ColorTargetState {
                         format: TextureFormat::Rgba8UnormSrgb,

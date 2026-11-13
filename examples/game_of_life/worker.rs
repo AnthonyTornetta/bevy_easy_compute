@@ -2,8 +2,7 @@ use bevy::prelude::*;
 
 use bevy_app_compute::prelude::*;
 use bytemuck::{Pod, Zeroable};
-use rand::{Rng, distr::Uniform};
-use tracing::info;
+use rand::distr::{Distribution, Uniform};
 use wgpu::BufferUsages;
 
 use crate::DIMENSIONS;
@@ -43,7 +42,7 @@ impl ComputeWorker for GameOfLifeWorker {
 
         info!("Generating {NUMBER_OF_CELLS} random cells...");
         for _ in 0..NUMBER_OF_CELLS {
-            let random = rng.sample(range);
+            let random = range.sample(&mut rng);
             if random > 0.75 {
                 initial_cell_data.push(1);
             } else {
